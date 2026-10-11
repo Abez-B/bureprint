@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- USB Printer Device Class is 7 (0x07) -->
+    <usb-device class="7" />
+    <!-- Fallback matches for universal USB composite or vendor-specific interfaces -->
+    <usb-device />
+</resources>

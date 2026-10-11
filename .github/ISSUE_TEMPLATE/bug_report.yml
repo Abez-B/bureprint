@@ -1,0 +1,59 @@
+name: "🐛 Bug Report"
+description: "File a bug report or regression to help fix issues in BurePrint"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please do NOT post sensitive document contents or network passwords.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "When attempting to print..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed step-by-step instructions to reproduce the behavior.
+      placeholder: |
+        1. Open BurePrint
+        2. Tap 'Documents' and import 'sample.pdf'
+        3. Tap 'Print Now' with printer ...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Device & Hardware Environment
+      description: Environment specifications where this bug occurred.
+      value: |
+        - Android Device Model: 
+        - Android OS Version: 
+        - BurePrint Version / Commit: 
+        - Printer Brand & Model: 
+        - Connection: Wi-Fi IPP / USB OTG
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Error Messages
+      description: Paste any error messages displayed on screen (ensure no sensitive document or personal data is included).

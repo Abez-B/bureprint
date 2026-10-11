@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../domain/models/printer_device.dart';
 
 @immutable
 class UsbPrinterDevice {
@@ -57,6 +58,23 @@ class UsbPrinterDevice {
         'hasPermission': hasPermission,
         'isIppOverUsb': isIppOverUsb,
       };
+
+  PrinterDevice toPrinterDevice() {
+    return PrinterDevice(
+      id: 'usb-$deviceId',
+      name: displayName,
+      connectionType: PrinterConnectionType.usb,
+      host: 'usb-$deviceId',
+      port: 0,
+      resourcePath: '/usb/print',
+      isOnline: true,
+      isDiscovered: true,
+      model: productName ?? manufacturerName,
+      vendorId: vendorId,
+      productId: productId,
+      usbDeviceId: deviceId,
+    );
+  }
 
   factory UsbPrinterDevice.fromJson(Map<String, dynamic> json) {
     return UsbPrinterDevice(

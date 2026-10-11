@@ -68,10 +68,17 @@ class UniversalPdfRenderer {
     try {
       doc = await PdfDocument.openFile(resolvedPath);
       final page = await doc.getPage(pageNumber);
+
+      // Render at target DPI (page dimensions from PDF are in points: 1/72 inch)
+      final scale = dpi / 72.0;
+      final targetWidth = page.width * scale;
+      final targetHeight = page.height * scale;
+
       final pageImage = await page.render(
-        width: page.width * 2,
-        height: page.height * 2,
+        width: targetWidth,
+        height: targetHeight,
         format: PdfPageImageFormat.png,
+        backgroundColor: '#FFFFFF', // Clean white background for PDF page
       );
       await page.close();
       return pageImage?.bytes;

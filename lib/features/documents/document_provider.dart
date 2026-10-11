@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../../core/storage/local_storage_service.dart';
 import '../../domain/models/imported_document.dart';
 import '../../domain/models/print_request.dart';
 
@@ -42,14 +42,29 @@ class DocumentState {
 class DocumentManagerNotifier extends Notifier<DocumentState> {
   @override
   DocumentState build() {
+    _loadStoredSessionDocuments();
     return const DocumentState();
   }
 
+  Future<void> _loadStoredSessionDocuments() async {
+    final docs = await LocalStorageService.instance.loadSessionDocuments();
+    if (docs.isNotEmpty) {
+      state = state.copyWith(
+        documents: docs,
+        selectedDocument: docs.first,
+      );
+    }
+  }
+
   void addDocument(ImportedDocument document) {
+    // Avoid duplicate IDs
+    final filtered = state.documents.where((d) => d.id != document.id).toList();
+    final updated = [document, ...filtered];
     state = state.copyWith(
-      documents: [document, ...state.documents],
+      documents: updated,
       selectedDocument: document,
     );
+    LocalStorageService.instance.saveSessionDocuments(updated);
   }
 
   void selectDocument(ImportedDocument? document) {
@@ -100,6 +115,7 @@ class DocumentManagerNotifier extends Notifier<DocumentState> {
           ? (remaining.isNotEmpty ? remaining.first : null)
           : state.selectedDocument,
     );
+    LocalStorageService.instance.saveSessionDocuments(remaining);
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme_provider.dart';
+import '../../platform/share/share_sheet_bridge.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -68,6 +69,43 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
+          _buildSectionHeader('Open Source & Community', theme),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.merge_type_rounded),
+                  title: const Text('Raise a Pull Request'),
+                  subtitle: const Text(
+                      'Contribute bug fixes or improvements on GitHub'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () => _launchExternalUrl(context, ref,
+                      'https://github.com/Abez-B/bureprint/pulls'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.bug_report_outlined),
+                  title: const Text('Report an Issue'),
+                  subtitle:
+                      const Text('File regressions, crashes, or protocol bugs'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () => _launchExternalUrl(context, ref,
+                      'https://github.com/Abez-B/bureprint/issues'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.lightbulb_outline_rounded),
+                  title: const Text('Request a Feature'),
+                  subtitle:
+                      const Text('Suggest new printer protocols or workflows'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () => _launchExternalUrl(context, ref,
+                      'https://github.com/Abez-B/bureprint/issues/new'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           _buildSectionHeader('About', theme),
           Card(
             child: Column(
@@ -76,9 +114,10 @@ class SettingsScreen extends ConsumerWidget {
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: Image.asset(
-                      'assets/brand/icon-48.png',
+                      'assets/brand/icon-512.png',
                       width: 28,
                       height: 28,
+                      filterQuality: FilterQuality.medium,
                       errorBuilder: (_, __, ___) =>
                           const Icon(Icons.info_outline),
                     ),
@@ -98,6 +137,23 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _launchExternalUrl(
+      BuildContext context, WidgetRef ref, String url) async {
+    try {
+      final bridge = ref.read(shareSheetBridgeProvider);
+      await bridge.openUrl(url);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open link: $url'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildSectionHeader(String title, ThemeData theme) {

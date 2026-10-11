@@ -22,6 +22,9 @@ class PrinterDevice {
     this.securityPolicy = TransportSecurityPolicy.ippsStrict,
     this.isDiscovered = true,
     this.capabilitiesQueried = false,
+    this.vendorId,
+    this.productId,
+    this.usbDeviceId,
   });
 
   final String id;
@@ -35,6 +38,9 @@ class PrinterDevice {
   final TransportSecurityPolicy securityPolicy;
   final bool isDiscovered;
   final bool capabilitiesQueried;
+  final int? vendorId;
+  final int? productId;
+  final int? usbDeviceId;
 
   String get endpointUri {
     final scheme = securityPolicy == TransportSecurityPolicy.plainIppExplicit
@@ -55,6 +61,9 @@ class PrinterDevice {
     TransportSecurityPolicy? securityPolicy,
     bool? isDiscovered,
     bool? capabilitiesQueried,
+    int? vendorId,
+    int? productId,
+    int? usbDeviceId,
   }) {
     return PrinterDevice(
       id: id ?? this.id,
@@ -68,6 +77,9 @@ class PrinterDevice {
       securityPolicy: securityPolicy ?? this.securityPolicy,
       isDiscovered: isDiscovered ?? this.isDiscovered,
       capabilitiesQueried: capabilitiesQueried ?? this.capabilitiesQueried,
+      vendorId: vendorId ?? this.vendorId,
+      productId: productId ?? this.productId,
+      usbDeviceId: usbDeviceId ?? this.usbDeviceId,
     );
   }
 
@@ -83,6 +95,9 @@ class PrinterDevice {
         'securityPolicy': securityPolicy.name,
         'isDiscovered': isDiscovered,
         'capabilitiesQueried': capabilitiesQueried,
+        if (vendorId != null) 'vendorId': vendorId,
+        if (productId != null) 'productId': productId,
+        if (usbDeviceId != null) 'usbDeviceId': usbDeviceId,
       };
 
   factory PrinterDevice.fromJson(Map<String, dynamic> json) {
@@ -102,6 +117,9 @@ class PrinterDevice {
           : TransportSecurityPolicy.ippsStrict,
       isDiscovered: json['isDiscovered'] as bool? ?? false,
       capabilitiesQueried: json['capabilitiesQueried'] as bool? ?? false,
+      vendorId: json['vendorId'] as int?,
+      productId: json['productId'] as int?,
+      usbDeviceId: json['usbDeviceId'] as int?,
     );
   }
 

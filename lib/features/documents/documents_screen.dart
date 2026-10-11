@@ -125,33 +125,46 @@ class DocumentsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No documents imported',
+                    'No documents yet',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                      'Select an image from photos or import a PDF document.'),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () =>
-                            _pickFiles(context, ref, DocumentPickMode.images),
-                        icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('Open Photos / Image'),
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Import documents or photos to preview and print without cloud processing.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark
+                            ? const Color(0xFF9E9E9E)
+                            : const Color(0xFF757575),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: () => _pickFiles(
-                            context, ref, DocumentPickMode.documents),
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                        label: const Text('Open PDF Document'),
-                      ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () =>
+                              _pickFiles(context, ref, DocumentPickMode.images),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Select Photos / Images'),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () => _pickFiles(
+                              context, ref, DocumentPickMode.documents),
+                          icon: const Icon(Icons.picture_as_pdf_outlined),
+                          label: const Text('Open PDF Document'),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -415,30 +428,73 @@ class DocumentsScreen extends ConsumerWidget {
                         subtitle: Text(
                           '${doc.formattedFileSize}${doc.pageCount != null ? " · ${doc.pageCount} pages" : ""}',
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Save / Download PDF',
-                              icon:
-                                  const Icon(Icons.download_outlined, size: 20),
-                              onPressed: () => _downloadDocument(context, doc),
-                            ),
-                            IconButton(
-                              tooltip: 'Print Settings',
-                              icon: const Icon(Icons.tune_outlined, size: 20),
-                              onPressed: () =>
-                                  PrintSettingsModal.show(context, doc),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove',
-                              icon: const Icon(Icons.delete_outline, size: 20),
-                              onPressed: () => ref
-                                  .read(documentManagerProvider.notifier)
-                                  .removeDocument(doc.id),
-                            ),
-                          ],
-                        ),
+                        trailing: isMultiSelecting
+                            ? null
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Print Settings',
+                                    icon: const Icon(Icons.tune_outlined,
+                                        size: 20),
+                                    onPressed: () =>
+                                        PrintSettingsModal.show(context, doc),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert, size: 20),
+                                    padding: EdgeInsets.zero,
+                                    onSelected: (val) {
+                                      if (val == 'download') {
+                                        _downloadDocument(context, doc);
+                                      } else if (val == 'remove') {
+                                        ref
+                                            .read(documentManagerProvider
+                                                .notifier)
+                                            .removeDocument(doc.id);
+                                      } else if (val == 'select') {
+                                        ref
+                                            .read(documentManagerProvider
+                                                .notifier)
+                                            .toggleSelection(doc.id);
+                                      }
+                                    },
+                                    itemBuilder: (ctx) => [
+                                      const PopupMenuItem(
+                                        value: 'download',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.download_outlined,
+                                                size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Save / Download PDF'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'select',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.checklist, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Select for Merge'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'remove',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete_outline,
+                                                size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Remove'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                       ),
                     );
                   },
@@ -507,15 +563,36 @@ class DocumentsScreen extends ConsumerWidget {
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
-            content: Text(
-              'Merged ${docs.length} files into "${merged.name}"',
-              style: TextStyle(color: isDark ? Colors.black : Colors.white),
+            content: Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  size: 18,
+                  color: isDark ? Colors.black : Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Merged into ${merged.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isDark ? Colors.black : Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            backgroundColor: isDark ? Colors.white : Colors.black,
+            backgroundColor: isDark ? Colors.white : const Color(0xFF1E1E1E),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             action: SnackBarAction(
-              label: 'DOWNLOAD',
+              label: 'SAVE PDF',
               textColor: isDark ? Colors.black : Colors.white,
               onPressed: () => _downloadDocument(context, merged),
             ),
@@ -533,6 +610,10 @@ class DocumentsScreen extends ConsumerWidget {
               style: TextStyle(color: isDark ? Colors.black : Colors.white),
             ),
             backgroundColor: isDark ? Colors.white : Colors.black,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -549,17 +630,42 @@ class DocumentsScreen extends ConsumerWidget {
     try {
       final savedPath = await exporter.exportDocument(doc);
       if (savedPath != null && context.mounted) {
+        final displayPath = savedPath.contains('/BurePrint/')
+            ? 'BurePrint/${savedPath.split('/').last}'
+            : savedPath.split('/').last;
+
         final messenger = ScaffoldMessenger.of(context);
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
-            content: Text(
-              'Saved to: $savedPath',
-              style: TextStyle(color: isDark ? Colors.black : Colors.white),
+            content: Row(
+              children: [
+                Icon(
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: isDark ? Colors.black : Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Saved to $displayPath',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isDark ? Colors.black : Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            backgroundColor: isDark ? Colors.white : Colors.black,
+            backgroundColor: isDark ? Colors.white : const Color(0xFF1E1E1E),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -576,6 +682,9 @@ class DocumentsScreen extends ConsumerWidget {
             backgroundColor: isDark ? Colors.white : Colors.black,
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }

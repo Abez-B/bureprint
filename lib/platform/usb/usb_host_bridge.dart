@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'usb_printer_device.dart';
 
@@ -33,7 +35,11 @@ class AndroidUsbHostBridge implements UsbHostBridge {
 
   StreamSubscription<dynamic>? _eventSubscription;
 
+  bool get _isSupportedPlatform =>
+      Platform.isAndroid || Platform.environment.containsKey('FLUTTER_TEST');
+
   void _initEventListener() {
+    if (!_isSupportedPlatform) return;
     try {
       _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
         (dynamic event) {
@@ -66,6 +72,7 @@ class AndroidUsbHostBridge implements UsbHostBridge {
 
   @override
   Future<List<UsbPrinterDevice>> enumerateDevices() async {
+    if (!_isSupportedPlatform) return const [];
     try {
       final List<dynamic>? result =
           await _methodChannel.invokeListMethod<dynamic>('enumerateDevices');
@@ -74,35 +81,38 @@ class AndroidUsbHostBridge implements UsbHostBridge {
           .map((item) =>
               UsbPrinterDevice.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList();
-    } on PlatformException {
+    } catch (_) {
       return const [];
     }
   }
 
   @override
   Future<bool> hasPermission(int deviceId) async {
+    if (!_isSupportedPlatform) return false;
     try {
       final bool? result = await _methodChannel
           .invokeMethod<bool>('hasPermission', {'deviceId': deviceId});
       return result ?? false;
-    } on PlatformException {
+    } catch (_) {
       return false;
     }
   }
 
   @override
   Future<bool> requestPermission(int deviceId) async {
+    if (!_isSupportedPlatform) return false;
     try {
       final bool? result = await _methodChannel
           .invokeMethod<bool>('requestPermission', {'deviceId': deviceId});
       return result ?? false;
-    } on PlatformException {
+    } catch (_) {
       return false;
     }
   }
 
   @override
   Future<bool> sendBytes(int deviceId, List<int> bytes) async {
+    if (!_isSupportedPlatform) return false;
     try {
       final bool? result =
           await _methodChannel.invokeMethod<bool>('sendBytes', {
@@ -110,7 +120,7 @@ class AndroidUsbHostBridge implements UsbHostBridge {
         'bytes': bytes,
       });
       return result ?? false;
-    } on PlatformException {
+    } catch (_) {
       return false;
     }
   }
@@ -121,3 +131,9 @@ class AndroidUsbHostBridge implements UsbHostBridge {
     _detachedController.close();
   }
 }
+
+final usbHostBridgeProvider = Provider<UsbHostBridge>((ref) {
+  final bridge = AndroidUsbHostBridge();
+  ref.onDispose(bridge.dispose);
+  return bridge;
+});

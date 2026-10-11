@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/printer_capabilities.dart';
 import '../../domain/models/printer_device.dart';
+import '../../platform/usb/usb_host_bridge.dart';
 import 'printers_provider.dart';
 
 class PrintersScreen extends ConsumerWidget {
@@ -68,6 +69,71 @@ class PrintersScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // USB OTG Printers Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'USB OTG Printers',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Refresh USB'),
+                onPressed: () async {
+                  final bridge = ref.read(usbHostBridgeProvider);
+                  final devices = await bridge.enumerateDevices();
+                  ref
+                      .read(printerRegistryProvider.notifier)
+                      .setUsbPrinters(devices);
+                  for (final d in devices) {
+                    ref
+                        .read(printerRegistryProvider.notifier)
+                        .addOrUpdateUsbDevice(d);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (printerState.usbPrinters.isEmpty)
+            Card(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.usb_outlined,
+                      size: 28,
+                      color: isDark
+                          ? const Color(0xFF888888)
+                          : const Color(0xFF777777),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Plug in a USB printer with an OTG cable.\nBurePrint will detect it and request permission automatically.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? const Color(0xFFBDBDBD)
+                              : const Color(0xFF616161),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            for (final usbDev in printerState.usbPrinters)
+              _buildUsbCard(context, ref, usbDev, printerState, isDark),
           const SizedBox(height: 20),
 
           // Discovered Printers
@@ -82,7 +148,7 @@ class PrintersScreen extends ConsumerWidget {
           if (printerState.discoveredPrinters.isEmpty)
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: Center(
                   child: Text(
                     'No printers discovered yet.\nEnsure your printer is on the same Wi-Fi network.',
@@ -92,6 +158,7 @@ class PrintersScreen extends ConsumerWidget {
                           ? const Color(0xFF9E9E9E)
                           : const Color(0xFF757575),
                       height: 1.4,
+                      fontSize: 13,
                     ),
                   ),
                 ),
@@ -99,50 +166,30 @@ class PrintersScreen extends ConsumerWidget {
             )
           else
             for (final printer in printerState.discoveredPrinters)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  leading: const Icon(Icons.print_outlined),
-                  title: Text(
-                    printer.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(printer.endpointUri),
-                      if (printerState.capabilitiesMap[printer.id]
-                              ?.markerSupplies.isNotEmpty ??
-                          false)
-                        _buildSupplyIndicators(
-                          printerState
-                              .capabilitiesMap[printer.id]!.markerSupplies,
-                          isDark,
-                        ),
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => ref
-                            .read(printerRegistryProvider.notifier)
-                            .savePrinter(printer),
-                        child: const Text('Save'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildDiscoveredCard(context, ref, printer, printerState, isDark),
           const SizedBox(height: 20),
 
           // Saved Printers
-          Text(
-            'Saved Printers',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Saved Printers',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Refresh Status'),
+                onPressed: () {
+                  ref
+                      .read(printerRegistryProvider.notifier)
+                      .refreshAllPrinters();
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           if (printerState.savedPrinters.isEmpty)
@@ -154,57 +201,382 @@ class PrintersScreen extends ConsumerWidget {
             )
           else
             for (final printer in printerState.savedPrinters)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  selected: printerState.selectedPrinter?.id == printer.id,
-                  leading: const Icon(Icons.print_outlined),
-                  title: Text(
-                    printer.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+              _buildSavedCard(context, ref, printer, printerState, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsbCard(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic usbDev,
+    PrinterRegistryState printerState,
+    bool isDark,
+  ) {
+    final isSelected =
+        printerState.selectedPrinter?.id == 'usb-${usbDev.deviceId}';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? (isDark ? Colors.white : Colors.black)
+              : (isDark ? Colors.white12 : Colors.black12),
+          width: isSelected ? 1.5 : 1.0,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: usbDev.hasPermission
+            ? () {
+                ref
+                    .read(printerRegistryProvider.notifier)
+                    .selectPrinter(usbDev.toPrinterDevice());
+              }
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF2C2C2E)
+                      : const Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.usb_rounded, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      usbDev.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      usbDev.hasPermission
+                          ? 'USB OTG · Ready'
+                          : 'USB OTG · Permission required',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: usbDev.hasPermission
+                            ? (isDark ? Colors.white60 : Colors.black54)
+                            : (isDark
+                                ? const Color(0xFFFFB74D)
+                                : const Color(0xFFE65100)),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (usbDev.hasPermission)
+                if (isSelected)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white : Colors.black,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Active',
+                      style: TextStyle(
+                        color: isDark ? Colors.black : Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                else
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 0),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () {
+                      ref
+                          .read(printerRegistryProvider.notifier)
+                          .selectPrinter(usbDev.toPrinterDevice());
+                    },
+                    child: const Text('Select', style: TextStyle(fontSize: 12)),
+                  )
+              else
+                FilledButton.tonal(
+                  style: FilledButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  subtitle: Column(
+                  onPressed: () async {
+                    final bridge = ref.read(usbHostBridgeProvider);
+                    final granted =
+                        await bridge.requestPermission(usbDev.deviceId);
+                    if (granted) {
+                      ref
+                          .read(printerRegistryProvider.notifier)
+                          .addOrUpdateUsbDevice(
+                              usbDev.copyWith(hasPermission: true));
+                    }
+                  },
+                  child: const Text('Allow', style: TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscoveredCard(
+    BuildContext context,
+    WidgetRef ref,
+    PrinterDevice printer,
+    PrinterRegistryState printerState,
+    bool isDark,
+  ) {
+    final hostLabel = printer.host != null && printer.host!.isNotEmpty
+        ? 'Wi-Fi · ${printer.host}'
+        : 'Wi-Fi Network';
+    final supplies =
+        printerState.capabilitiesMap[printer.id]?.markerSupplies ?? const [];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isDark ? Colors.white12 : Colors.black12,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF2C2C2E)
+                        : const Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.wifi_rounded, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${printer.endpointUri} · ${printerState.selectedPrinter?.id == printer.id ? "Selected (Default)" : "Ready"}',
-                      ),
-                      if (printerState.capabilitiesMap[printer.id]
-                              ?.markerSupplies.isNotEmpty ??
-                          false)
-                        _buildSupplyIndicators(
-                          printerState
-                              .capabilitiesMap[printer.id]!.markerSupplies,
-                          isDark,
+                        printer.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hostLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isDark ? Colors.white60 : Colors.black54,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
-                  trailing: printerState.selectedPrinter?.id == printer.id
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white : Colors.black,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Active',
-                            style: TextStyle(
-                              color: isDark ? Colors.black : Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        )
-                      : OutlinedButton(
-                          onPressed: () => ref
-                              .read(printerRegistryProvider.notifier)
-                              .selectPrinter(printer),
-                          child: const Text('Select'),
-                        ),
                 ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => ref
+                      .read(printerRegistryProvider.notifier)
+                      .savePrinter(printer),
+                  child: const Text('Save', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+            if (supplies.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _buildSupplyIndicators(supplies, isDark),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSavedCard(
+    BuildContext context,
+    WidgetRef ref,
+    PrinterDevice printer,
+    PrinterRegistryState printerState,
+    bool isDark,
+  ) {
+    final isSelected = printerState.selectedPrinter?.id == printer.id;
+    final isNetwork = printer.connectionType == PrinterConnectionType.network;
+    final subtitleLabel = isNetwork
+        ? (printer.host != null && printer.host!.isNotEmpty
+            ? 'Wi-Fi · ${printer.host}'
+            : 'Wi-Fi Printer')
+        : 'USB OTG Printer';
+
+    final supplies =
+        printerState.capabilitiesMap[printer.id]?.markerSupplies ?? const [];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? (isDark ? Colors.white : Colors.black)
+              : (isDark ? Colors.white12 : Colors.black12),
+          width: isSelected ? 1.5 : 1.0,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () =>
+            ref.read(printerRegistryProvider.notifier).selectPrinter(printer),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF2F2F7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      isNetwork ? Icons.wifi_rounded : Icons.usb_rounded,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          printer.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitleLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDark ? Colors.white60 : Colors.black54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (isSelected)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white : Colors.black,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Active',
+                        style: TextStyle(
+                          color: isDark ? Colors.black : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  else
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 0),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () => ref
+                          .read(printerRegistryProvider.notifier)
+                          .selectPrinter(printer),
+                      child:
+                          const Text('Select', style: TextStyle(fontSize: 12)),
+                    ),
+                  const SizedBox(width: 2),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Remove',
+                    onPressed: () => ref
+                        .read(printerRegistryProvider.notifier)
+                        .removeSavedPrinter(printer.id),
+                  ),
+                ],
               ),
-        ],
+              if (supplies.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _buildSupplyIndicators(supplies, isDark),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -281,25 +653,9 @@ class PrintersScreen extends ConsumerWidget {
   void _toggleScan(WidgetRef ref, bool isScanning) {
     final notifier = ref.read(printerRegistryProvider.notifier);
     if (isScanning) {
-      notifier.setScanning(false);
+      notifier.stopNetworkScan();
     } else {
-      notifier.setScanning(true);
-      // Simulate discovering a local IPP printer
-      Future.delayed(const Duration(milliseconds: 600), () {
-        notifier.addDiscoveredPrinter(
-          const PrinterDevice(
-            id: 'discovered-ipp-1',
-            name: 'Office LaserJet Pro',
-            connectionType: PrinterConnectionType.network,
-            host: '192.168.1.150',
-            port: 631,
-            resourcePath: '/ipp/print',
-            isOnline: true,
-            isDiscovered: true,
-          ),
-        );
-        notifier.setScanning(false);
-      });
+      notifier.startNetworkScan();
     }
   }
 
@@ -418,36 +774,15 @@ class PrintersScreen extends ConsumerWidget {
                       .read(printerRegistryProvider.notifier)
                       .addDiscoveredPrinter(newDevice);
 
-                  // Provide simulated supply levels for manual test device
+                  // Save printer so it persists forever
                   ref
                       .read(printerRegistryProvider.notifier)
-                      .setPrinterCapabilities(
-                        newDevice.id,
-                        PrinterCapabilities(
-                          printerName: newDevice.name,
-                          printerMakeAndModel: 'Manual Network Printer',
-                          printerState: 'idle',
-                          supportsColor: true,
-                          supportsDuplex: true,
-                          operationsSupported: const [0x0002, 0x0005, 0x0006],
-                          documentFormats: const [
-                            'application/pdf',
-                            'image/pwg-raster',
-                            'image/jpeg',
-                            'image/png'
-                          ],
-                          markerSupplies: const [
-                            PrinterSupplyLevel(
-                                name: 'Black Toner',
-                                colorHex: '#000000',
-                                levelPercent: 78),
-                            PrinterSupplyLevel(
-                                name: 'Color Toner',
-                                colorHex: '#00AAFF',
-                                levelPercent: 55),
-                          ],
-                        ),
-                      );
+                      .savePrinter(newDevice);
+
+                  // Fetch supplies and attributes in background
+                  ref
+                      .read(printerRegistryProvider.notifier)
+                      .queryCapabilitiesInBackground(newDevice);
 
                   Navigator.of(ctx).pop();
                 }

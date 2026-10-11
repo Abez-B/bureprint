@@ -1,0 +1,13 @@
+BurePrint is an open-source, privacy-first mobile printing application for Android.
+
+Key Features:
+- Print documents, PDFs, photos, and web pages directly from your device.
+- Local-first architecture: Zero telemetry, zero cloud tracking, zero remote servers.
+- Automatic Wi-Fi network printer discovery via mDNS / DNS-SD / IPP (Internet Printing Protocol).
+- Direct USB OTG printer support.
+- Built-in multi-page preview, custom margins, multi-copy, and print settings.
+- Merge multiple documents and export or print as a unified PDF.
+- Saved documents stored directly in your device's organized BurePrint folder.
+
+Privacy Policy:
+BurePrint processes all documents locally on your device. No document contents, filenames, or printer credentials are ever transmitted to any third-party servers.

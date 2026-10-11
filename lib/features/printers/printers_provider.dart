@@ -1,12 +1,18 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/storage/local_storage_service.dart';
+import '../../data/ipp/ipp_client.dart';
 import '../../domain/models/printer_capabilities.dart';
 import '../../domain/models/printer_device.dart';
+import '../../platform/network/nsd_discovery_bridge.dart';
+import '../../platform/usb/usb_printer_device.dart';
 
 class PrinterRegistryState {
   const PrinterRegistryState({
     this.discoveredPrinters = const [],
     this.savedPrinters = const [],
+    this.usbPrinters = const [],
     this.selectedPrinter,
     this.isScanning = false,
     this.capabilitiesMap = const {},
@@ -14,6 +20,7 @@ class PrinterRegistryState {
 
   final List<PrinterDevice> discoveredPrinters;
   final List<PrinterDevice> savedPrinters;
+  final List<UsbPrinterDevice> usbPrinters;
   final PrinterDevice? selectedPrinter;
   final bool isScanning;
   final Map<String, PrinterCapabilities> capabilitiesMap;
@@ -21,6 +28,7 @@ class PrinterRegistryState {
   PrinterRegistryState copyWith({
     List<PrinterDevice>? discoveredPrinters,
     List<PrinterDevice>? savedPrinters,
+    List<UsbPrinterDevice>? usbPrinters,
     PrinterDevice? selectedPrinter,
     bool? isScanning,
     Map<String, PrinterCapabilities>? capabilitiesMap,
@@ -28,6 +36,7 @@ class PrinterRegistryState {
     return PrinterRegistryState(
       discoveredPrinters: discoveredPrinters ?? this.discoveredPrinters,
       savedPrinters: savedPrinters ?? this.savedPrinters,
+      usbPrinters: usbPrinters ?? this.usbPrinters,
       selectedPrinter: selectedPrinter ?? this.selectedPrinter,
       isScanning: isScanning ?? this.isScanning,
       capabilitiesMap: capabilitiesMap ?? this.capabilitiesMap,
@@ -48,49 +57,87 @@ class PrinterRegistryNotifier extends Notifier<PrinterRegistryState> {
     capabilitiesQueried: true,
   );
 
-  static const testVirtualPrinter = PrinterDevice(
-    id: 'virtual-test-printer',
-    name: 'Virtual Test Printer (IPP Duplex)',
-    connectionType: PrinterConnectionType.network,
-    host: '127.0.0.1',
-    port: 631,
-    resourcePath: '/ipp/print',
-    isOnline: true,
-    isDiscovered: false,
-    capabilitiesQueried: true,
-  );
-
-  static const defaultVirtualCapabilities = PrinterCapabilities(
-    printerName: 'Virtual Test Printer (IPP Duplex)',
-    printerMakeAndModel: 'Generic IPP Everywhere Printer',
-    printerState: 'idle',
-    supportsColor: true,
-    supportsDuplex: true,
-    operationsSupported: [0x0002, 0x0005, 0x0006],
-    documentFormats: [
-      'application/pdf',
-      'image/pwg-raster',
-      'image/jpeg',
-      'image/png'
-    ],
-    markerSupplies: [
-      PrinterSupplyLevel(name: 'Black', colorHex: '#000000', levelPercent: 85),
-      PrinterSupplyLevel(name: 'Cyan', colorHex: '#00FFFF', levelPercent: 62),
-      PrinterSupplyLevel(
-          name: 'Magenta', colorHex: '#FF00FF', levelPercent: 48),
-      PrinterSupplyLevel(name: 'Yellow', colorHex: '#FFFF00', levelPercent: 90),
-    ],
-  );
+  StreamSubscription<PrinterDevice>? _nsdSubscription;
+  Timer? _scanTimeoutTimer;
 
   @override
   PrinterRegistryState build() {
+    ref.onDispose(() {
+      _nsdSubscription?.cancel();
+      _scanTimeoutTimer?.cancel();
+    });
+    _loadSavedPrintersFromDisk();
     return const PrinterRegistryState(
-      savedPrinters: [saveAsPdfPrinter, testVirtualPrinter],
-      selectedPrinter: saveAsPdfPrinter,
-      capabilitiesMap: {
-        'virtual-test-printer': defaultVirtualCapabilities,
-      },
+      savedPrinters: [],
+      selectedPrinter: null,
     );
+  }
+
+  Future<void> _loadSavedPrintersFromDisk() async {
+    final loaded = await LocalStorageService.instance.loadSavedPrinters();
+    final realPrinters =
+        loaded.where((p) => p.id != 'save-as-pdf-virtual').toList();
+    if (realPrinters.isNotEmpty) {
+      state = state.copyWith(
+        savedPrinters: realPrinters,
+        selectedPrinter: state.selectedPrinter ?? realPrinters.first,
+      );
+      // Immediately fetch toner/ink and printer status for saved network printers
+      for (final p in realPrinters) {
+        if (p.connectionType == PrinterConnectionType.network) {
+          queryCapabilitiesInBackground(p);
+        }
+      }
+    }
+  }
+
+  void startNetworkScan() async {
+    state = state.copyWith(isScanning: true);
+    final bridge = ref.read(nsdDiscoveryBridgeProvider);
+    await _nsdSubscription?.cancel();
+    _nsdSubscription = bridge.onPrinterDiscovered.listen((printer) {
+      addDiscoveredPrinter(printer);
+      queryCapabilitiesInBackground(printer);
+    });
+
+    await bridge.startDiscovery();
+
+    // Auto-stop discovery after 15 seconds to conserve device battery
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = Timer(const Duration(seconds: 15), () {
+      stopNetworkScan();
+    });
+  }
+
+  void stopNetworkScan() async {
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
+    try {
+      final bridge = ref.read(nsdDiscoveryBridgeProvider);
+      await bridge.stopDiscovery();
+    } catch (_) {}
+    state = state.copyWith(isScanning: false);
+  }
+
+  Future<void> queryCapabilitiesInBackground(PrinterDevice printer,
+      {bool force = false}) async {
+    if (!force && state.capabilitiesMap.containsKey(printer.id)) return;
+    try {
+      final client = IppClient();
+      final caps = await client.getCapabilities(printer);
+      setPrinterCapabilities(printer.id, caps);
+    } catch (_) {}
+  }
+
+  Future<void> refreshAllPrinters() async {
+    for (final printer in [
+      ...state.savedPrinters,
+      ...state.discoveredPrinters
+    ]) {
+      if (printer.connectionType == PrinterConnectionType.network) {
+        queryCapabilitiesInBackground(printer, force: true);
+      }
+    }
   }
 
   void setScanning(bool scanning) {
@@ -112,22 +159,75 @@ class PrinterRegistryNotifier extends Notifier<PrinterRegistryState> {
   }
 
   void savePrinter(PrinterDevice printer) {
+    if (printer.id == 'save-as-pdf-virtual') return;
     if (!state.savedPrinters.any((p) => p.id == printer.id)) {
-      state = state.copyWith(savedPrinters: [...state.savedPrinters, printer]);
+      final updated = [...state.savedPrinters, printer];
+      state = state.copyWith(savedPrinters: updated);
+      // Persist forever to storage
+      LocalStorageService.instance.savePrinters(updated);
+      if (printer.connectionType == PrinterConnectionType.network) {
+        queryCapabilitiesInBackground(printer, force: true);
+      }
     }
   }
 
   void removeSavedPrinter(String printerId) {
+    final updated =
+        state.savedPrinters.where((p) => p.id != printerId).toList();
     state = state.copyWith(
-      savedPrinters:
-          state.savedPrinters.where((p) => p.id != printerId).toList(),
-      selectedPrinter:
-          state.selectedPrinter?.id == printerId ? null : state.selectedPrinter,
+      savedPrinters: updated,
+      selectedPrinter: state.selectedPrinter?.id == printerId
+          ? (updated.isNotEmpty ? updated.first : null)
+          : state.selectedPrinter,
     );
+    // Persist removal to storage
+    LocalStorageService.instance.savePrinters(updated);
   }
 
   void selectPrinter(PrinterDevice? printer) {
     state = state.copyWith(selectedPrinter: printer);
+  }
+
+  void setUsbPrinters(List<UsbPrinterDevice> devices) {
+    state = state.copyWith(usbPrinters: devices);
+  }
+
+  void addOrUpdateUsbDevice(UsbPrinterDevice device) {
+    final existingIndex =
+        state.usbPrinters.indexWhere((d) => d.deviceId == device.deviceId);
+    final updatedList = List<UsbPrinterDevice>.from(state.usbPrinters);
+    if (existingIndex >= 0) {
+      updatedList[existingIndex] = device;
+    } else {
+      updatedList.add(device);
+    }
+
+    final printerDevice = device.toPrinterDevice();
+    state = state.copyWith(
+      usbPrinters: updatedList,
+      selectedPrinter: state.selectedPrinter == null ||
+              state.selectedPrinter?.id == 'save-as-pdf-virtual'
+          ? printerDevice
+          : state.selectedPrinter,
+    );
+
+    addDiscoveredPrinter(printerDevice);
+    savePrinter(printerDevice);
+  }
+
+  void removeUsbDevice(int deviceId) {
+    final updated =
+        state.usbPrinters.where((d) => d.deviceId != deviceId).toList();
+    final removedPrinterId = 'usb-$deviceId';
+    state = state.copyWith(
+      usbPrinters: updated,
+      discoveredPrinters: state.discoveredPrinters
+          .where((p) => p.id != removedPrinterId)
+          .toList(),
+      selectedPrinter: state.selectedPrinter?.id == removedPrinterId
+          ? (state.savedPrinters.isNotEmpty ? state.savedPrinters.first : null)
+          : state.selectedPrinter,
+    );
   }
 
   void setPrinterCapabilities(

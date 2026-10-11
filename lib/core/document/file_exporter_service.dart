@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
 import '../../domain/models/imported_document.dart';
+import '../../platform/share/share_sheet_bridge.dart';
 import 'office_document_converter.dart';
 
 /// Service to export / download documents (or converted PDFs) to user device storage.
@@ -64,6 +65,13 @@ class FileExporterService {
     }
 
     await sourceFile.copy(selectedPath);
+
+    if (Platform.isAndroid) {
+      try {
+        await AndroidShareSheetBridge().notifyMediaScanner(selectedPath);
+      } catch (_) {}
+    }
+
     return selectedPath;
   }
 
@@ -76,10 +84,41 @@ class FileExporterService {
     return originalName;
   }
 
+  /// Resolves the fallback download destination.
+  /// On Android, saves to the dedicated `BurePrint` folder in user storage (e.g. `/storage/emulated/0/Download/BurePrint`).
   Future<String?> _resolveFallbackDownloadPath(String filename) async {
+    if (Platform.isAndroid) {
+      final androidCandidates = [
+        '/storage/emulated/0/Download/BurePrint',
+        '/storage/emulated/0/Documents/BurePrint',
+        '/sdcard/Download/BurePrint',
+        '/storage/emulated/0/BurePrint',
+      ];
+
+      for (final candidate in androidCandidates) {
+        try {
+          final dir = Directory(candidate);
+          if (!await dir.exists()) {
+            await dir.create(recursive: true);
+          }
+          return '${dir.path}/$filename';
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
     final home =
         Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
     if (home != null && home.isNotEmpty) {
+      final burePrintDownloads = Directory('$home/Downloads/BurePrint');
+      try {
+        if (!await burePrintDownloads.exists()) {
+          await burePrintDownloads.create(recursive: true);
+        }
+        return '${burePrintDownloads.path}/$filename';
+      } catch (_) {}
+
       final downloadsDir = Directory('$home/Downloads');
       if (await downloadsDir.exists()) {
         return '${downloadsDir.path}/$filename';
@@ -90,7 +129,7 @@ class FileExporterService {
       }
     }
 
-    // Fallback to system temp if no home path
+    // Fallback to system temp if no home path (e.g. unit test runner)
     return '${Directory.systemTemp.path}/$filename';
   }
 }

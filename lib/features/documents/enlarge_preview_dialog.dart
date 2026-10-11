@@ -368,17 +368,17 @@ class _EnlargePreviewDialogState extends State<EnlargePreviewDialog> {
           aspectRatio: ratio,
           child: Container(
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color:
-                    isDark ? const Color(0xFF555555) : const Color(0xFFCCCCCC),
+                    isDark ? const Color(0xFF666666) : const Color(0xFFCCCCCC),
                 width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isDark ? Colors.white10 : Colors.black12,
-                  blurRadius: 10,
+                  color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.15),
+                  blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
               ],

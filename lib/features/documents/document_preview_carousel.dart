@@ -283,18 +283,19 @@ class _DocumentPreviewCarouselState extends State<DocumentPreviewCarousel> {
                   width: sheetWidth,
                   height: sheetHeight,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.black : Colors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: isDark
-                          ? const Color(0xFF666666)
-                          : const Color(0xFF000000),
+                          ? const Color(0xFF555555)
+                          : const Color(0xFFD0D0D0),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: isDark ? Colors.white10 : Colors.black12,
-                        blurRadius: 6,
+                        color:
+                            Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
+                        blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
                     ],
