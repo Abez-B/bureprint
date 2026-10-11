@@ -1,0 +1,66 @@
+// Mock IPP binary frame representing a Get-Printer-Attributes response from a network printer
+// Version: 1.1 (0x0101), Status: successful-ok (0x0000), Request ID: 1 (0x00000001)
+// Tag 0x01: Operation attributes (attributes-charset: utf-8, attributes-natural-language: en)
+// Tag 0x04: Printer attributes (printer-name: OfficeJet Pro, document-format-supported: application/pdf, image/pwg-raster)
+// Tag 0x03: End of attributes
+const List<int> mockIppGetAttributesResponse = [
+  0x01, 0x01, // IPP 1.1
+  0x00, 0x00, // status-code: successful-ok
+  0x00, 0x00, 0x00, 0x01, // request-id: 1
+  0x01, // operation-attributes-tag
+  0x47, // charset tag
+  0x00, 0x12, // name length (18)
+  ...[
+    0x61,
+    0x74,
+    0x74,
+    0x72,
+    0x69,
+    0x62,
+    0x75,
+    0x74,
+    0x65,
+    0x73,
+    0x2d,
+    0x63,
+    0x68,
+    0x61,
+    0x72,
+    0x73,
+    0x65,
+    0x74
+  ], // "attributes-charset"
+  0x00, 0x05, // value length (5)
+  ...[0x75, 0x74, 0x66, 0x2d, 0x38], // "utf-8"
+  0x04, // printer-attributes-tag
+  0x42, // nameWithoutLanguage tag
+  0x00, 0x0c, // name length (12)
+  ...[
+    0x70,
+    0x72,
+    0x69,
+    0x6e,
+    0x74,
+    0x65,
+    0x72,
+    0x2d,
+    0x6e,
+    0x61,
+    0x6d,
+    0x65
+  ], // "printer-name"
+  0x00, 0x0a, // value length (10)
+  ...[
+    0x4f,
+    0x66,
+    0x66,
+    0x69,
+    0x63,
+    0x65,
+    0x4a,
+    0x65,
+    0x74,
+    0x20
+  ], // "OfficeJet "
+  0x03, // end-of-attributes-tag
+];

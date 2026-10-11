@@ -6,103 +6,170 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        // Hero Card: Pure Black & White Contrast
         Container(
-          padding: const EdgeInsets.all(22),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF246B57), Color(0xFF399879)],
+            color: isDark ? Colors.white : Colors.black,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF333333) : const Color(0xFF000000),
+              width: 1,
             ),
-            borderRadius: BorderRadius.circular(24),
           ),
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.print_rounded, color: Colors.white, size: 36),
-              SizedBox(height: 18),
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/brand/icon-96.png',
+                      width: 44,
+                      height: 44,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.print,
+                        size: 36,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'BurePrint',
+                      style: TextStyle(
+                        color: isDark ? Colors.black : Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.8,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               Text(
-                'Print, without the fuss.',
+                'Private, local-first printing. Your documents stay on your device.',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+                  color: isDark
+                      ? const Color(0xFF424242)
+                      : const Color(0xFFE0E0E0),
+                  fontSize: 15,
+                  height: 1.4,
                 ),
               ),
-              SizedBox(height: 8),
-              Text(
-                'Private, local-first printing. Your documents stay yours.',
-                style: TextStyle(color: Colors.white, height: 1.4),
+              const SizedBox(height: 20),
+              // Three quick options: Images, Documents, and Files
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => context.go('/documents?type=images'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: isDark ? Colors.black : Colors.white,
+                      foregroundColor: isDark ? Colors.white : Colors.black,
+                    ),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Images'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => context.go('/documents?type=documents'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: isDark ? Colors.black : Colors.white,
+                      foregroundColor: isDark ? Colors.white : Colors.black,
+                    ),
+                    icon: const Icon(Icons.description_outlined),
+                    label: const Text('Documents'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/documents?type=all'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isDark ? Colors.black : Colors.white,
+                      side: BorderSide(
+                        color: isDark ? Colors.black : Colors.white,
+                      ),
+                    ),
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: const Text('All Files'),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 22),
-        Text('Get started', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        _ActionCard(
-          icon: Icons.description_outlined,
-          title: 'Choose a document',
-          subtitle: 'PDF and image workflow planned',
-          onTap: () => context.go('/documents'),
-        ),
-        _ActionCard(
-          icon: Icons.print_outlined,
-          title: 'Find a printer',
-          subtitle: 'Network and USB support in development',
-          onTap: () => context.go('/printers'),
-        ),
-        _ActionCard(
-          icon: Icons.list_alt_outlined,
-          title: 'Print queue',
-          subtitle: 'View print jobs and their status',
-          onTap: () => context.go('/queue'),
-        ),
-        const SizedBox(height: 12),
-        const Card(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Early development scaffold: no real print jobs are sent yet.',
-                  ),
-                ),
-              ],
+        const SizedBox(height: 28),
+
+        // Section: Printers
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Printers',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
             ),
+            TextButton(
+              onPressed: () => context.go('/printers'),
+              child: const Text('View All'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.print_outlined),
+            title: const Text(
+              'No printer connected',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text('Discover on Wi-Fi or connect via USB OTG'),
+            trailing: OutlinedButton(
+              onPressed: () => context.go('/printers'),
+              child: const Text('Scan'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Section: Active Jobs / Queue
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Print Queue',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.go('/queue'),
+              child: const Text('View Queue'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Card(
+          child: ListTile(
+            leading: Icon(Icons.check_circle_outline),
+            title: Text(
+              'Queue is empty',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text('No jobs currently pending or active'),
           ),
         ),
       ],
     );
   }
-}
-
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Card(
-        child: ListTile(
-          leading: CircleAvatar(child: Icon(icon)),
-          title: Text(title),
-          subtitle: Text(subtitle),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: onTap,
-        ),
-      );
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/documents/documents_screen.dart';
@@ -6,60 +7,53 @@ import '../features/home/home_screen.dart';
 import '../features/printers/printers_screen.dart';
 import '../features/queue/queue_screen.dart';
 import '../features/settings/settings_screen.dart';
+import 'theme.dart';
+import 'theme_provider.dart';
 
-class BurePrintApp extends StatelessWidget {
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/',
+    routes: [
+      ShellRoute(
+        builder: (context, state, child) => AppShell(
+          location: state.uri.path,
+          child: child,
+        ),
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+          GoRoute(
+            path: '/documents',
+            builder: (_, __) => const DocumentsScreen(),
+          ),
+          GoRoute(
+            path: '/printers',
+            builder: (_, __) => const PrintersScreen(),
+          ),
+          GoRoute(path: '/queue', builder: (_, __) => const QueueScreen()),
+          GoRoute(
+            path: '/settings',
+            builder: (_, __) => const SettingsScreen(),
+          ),
+        ],
+      ),
+    ],
+  );
+});
+
+class BurePrintApp extends ConsumerWidget {
   const BurePrintApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final router = GoRouter(
-      initialLocation: '/',
-      routes: [
-        ShellRoute(
-          builder: (context, state, child) => AppShell(
-            location: state.uri.path,
-            child: child,
-          ),
-          routes: [
-            GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
-            GoRoute(
-              path: '/documents',
-              builder: (_, __) => const DocumentsScreen(),
-            ),
-            GoRoute(
-              path: '/printers',
-              builder: (_, __) => const PrintersScreen(),
-            ),
-            GoRoute(path: '/queue', builder: (_, __) => const QueueScreen()),
-            GoRoute(
-              path: '/settings',
-              builder: (_, __) => const SettingsScreen(),
-            ),
-          ],
-        ),
-      ],
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'BurePrint',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF246B57),
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF7F8F6),
-        appBarTheme: const AppBarTheme(centerTitle: false),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF65C7A5),
-          brightness: Brightness.dark,
-        ),
-      ),
-      themeMode: ThemeMode.system,
+      theme: BurePrintTheme.lightTheme,
+      darkTheme: BurePrintTheme.darkTheme,
+      themeMode: themeMode,
       routerConfig: router,
     );
   }
@@ -84,19 +78,31 @@ class AppShell extends StatelessWidget {
     final selected = _destinations.indexWhere((d) => d.path == location);
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.print_rounded),
-            SizedBox(width: 10),
-            Text('BurePrint', style: TextStyle(fontWeight: FontWeight.w700)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: Image.asset(
+                'assets/brand/icon-48.png',
+                width: 24,
+                height: 24,
+                errorBuilder: (_, __, ___) => const Icon(Icons.print, size: 20),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'BurePrint',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.5),
+            ),
           ],
         ),
       ),
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selected < 0 ? 0 : selected,
-        onDestinationSelected: (index) =>
-            context.go(_destinations[index].path),
+        onDestinationSelected: (index) => context.go(_destinations[index].path),
         destinations: [
           for (final destination in _destinations)
             NavigationDestination(
