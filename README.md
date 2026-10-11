@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/icon-512.png" width="128" height="128" alt="BurePrint Logo" style="border-radius: 24px;" />
+  <img src="https://github.com/user-attachments/assets/e18e6324-69ba-4d09-8d2e-d647339a2b1c" width="128" height="128" alt="BurePrint Logo" style="border-radius: 24px;" />
 </p>
 
 <h1 align="center">BurePrint</h1>
