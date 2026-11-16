@@ -96,6 +96,22 @@ class QueueScreen extends ConsumerWidget {
                                 fontSize: 13, fontStyle: FontStyle.italic),
                           ),
                         ],
+                        if (job.status.isActive) ...[
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: (job.sheetsCompleted != null &&
+                                    job.pageCount != null &&
+                                    job.pageCount! > 0)
+                                ? LinearProgressIndicator(
+                                    value:
+                                        (job.sheetsCompleted! / job.pageCount!)
+                                            .clamp(0.0, 1.0),
+                                    minHeight: 6,
+                                  )
+                                : const LinearProgressIndicator(minHeight: 6),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

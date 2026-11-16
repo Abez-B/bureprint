@@ -37,6 +37,16 @@ class FakeUsbHostBridge implements UsbHostBridge {
 
   @override
   Future<bool> sendBytes(int deviceId, List<int> bytes) async => sendSuccess;
+
+  @override
+  Future<bool> openUsbSession(int deviceId) async => sendSuccess;
+
+  @override
+  Future<bool> writeUsbChunk(int deviceId, List<int> bytes) async =>
+      sendSuccess;
+
+  @override
+  Future<void> closeUsbSession(int deviceId) async {}
 }
 
 void main() {
@@ -52,7 +62,7 @@ void main() {
 
     const rawUsbDevice = UsbPrinterDevice(
       deviceId: 2,
-      vendorId: 0x04B8, // Epson
+      vendorId: 0x9999, // Unknown / Unsupported vendor
       productId: 0x5678,
       deviceName: '/dev/bus/usb/001/003',
       isIppOverUsb: false, // Unknown / Raw protocol

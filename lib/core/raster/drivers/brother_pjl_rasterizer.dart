@@ -78,7 +78,8 @@ class BrotherPjlRasterizer implements PrinterRasterizer {
     pagePjl.write('\x1BE');
     pagePjl.write('\x1B&l${math.max(1, settings.copies)}X');
     if (settings.duplex) {
-      pagePjl.write('\x1B&l2S');
+      final duplexCode = settings.duplexMode == DuplexMode.shortEdge ? 1 : 2;
+      pagePjl.write('\x1B&l${duplexCode}S');
     }
     output.add(utf8.encode(pagePjl.toString()));
 

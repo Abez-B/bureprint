@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/document/file_exporter_service.dart';
 import '../../core/document/file_picker_service.dart';
 import '../../core/document/pdf_merge_service.dart';
+import '../../core/document/sample_document_service.dart';
 import '../../domain/models/imported_document.dart';
 import 'document_provider.dart';
 import 'document_thumbnail_view.dart';
@@ -72,13 +73,34 @@ class DocumentsScreen extends ConsumerWidget {
                         .read(documentManagerProvider.notifier)
                         .toggleViewMode(),
                   ),
-                PopupMenuButton<DocumentPickMode>(
+                PopupMenuButton<String>(
                   tooltip: 'Import',
                   icon: const Icon(Icons.add_circle_outline),
-                  onSelected: (mode) => _pickFiles(context, ref, mode),
+                  onSelected: (val) {
+                    if (val == 'test_page') {
+                      _loadTestPage(context, ref);
+                    } else if (val == 'images') {
+                      _pickFiles(context, ref, DocumentPickMode.images);
+                    } else if (val == 'documents') {
+                      _pickFiles(context, ref, DocumentPickMode.documents);
+                    } else if (val == 'all') {
+                      _pickFiles(context, ref, DocumentPickMode.allFiles);
+                    }
+                  },
                   itemBuilder: (ctx) => [
                     const PopupMenuItem(
-                      value: DocumentPickMode.images,
+                      value: 'test_page',
+                      child: Row(
+                        children: [
+                          Icon(Icons.print_outlined, size: 20),
+                          SizedBox(width: 10),
+                          Text('Printer Test Page'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'images',
                       child: Row(
                         children: [
                           Icon(Icons.photo_library_outlined, size: 20),
@@ -88,7 +110,7 @@ class DocumentsScreen extends ConsumerWidget {
                       ),
                     ),
                     const PopupMenuItem(
-                      value: DocumentPickMode.documents,
+                      value: 'documents',
                       child: Row(
                         children: [
                           Icon(Icons.picture_as_pdf_outlined, size: 20),
@@ -98,7 +120,7 @@ class DocumentsScreen extends ConsumerWidget {
                       ),
                     ),
                     const PopupMenuItem(
-                      value: DocumentPickMode.allFiles,
+                      value: 'all',
                       child: Row(
                         children: [
                           Icon(Icons.folder_open_outlined, size: 20),
@@ -151,6 +173,13 @@ class DocumentsScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         FilledButton.icon(
+                          onPressed: () => _loadTestPage(context, ref),
+                          icon: const Icon(Icons.print_outlined),
+                          label:
+                              const Text('Print Test Page (Diagnostic Sheet)'),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
                           onPressed: () =>
                               _pickFiles(context, ref, DocumentPickMode.images),
                           icon: const Icon(Icons.photo_library_outlined),
@@ -500,6 +529,42 @@ class DocumentsScreen extends ConsumerWidget {
                   },
                 ),
     );
+  }
+
+  Future<void> _loadTestPage(BuildContext context, WidgetRef ref) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    try {
+      const service = SampleDocumentService();
+      final doc = await service.loadSampleTestPage();
+      ref.read(documentManagerProvider.notifier).addDocument(doc);
+      ref.read(documentManagerProvider.notifier).selectDocument(doc);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Diagnostic test sheet loaded',
+              style: TextStyle(color: isDark ? Colors.black : Colors.white),
+            ),
+            backgroundColor: isDark ? Colors.white : Colors.black,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        PrintSettingsModal.show(context, doc);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to load test page: $e',
+              style: TextStyle(color: isDark ? Colors.black : Colors.white),
+            ),
+            backgroundColor: isDark ? Colors.white : Colors.black,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _pickFiles(

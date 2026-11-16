@@ -39,6 +39,14 @@ class MainActivity : FlutterActivity() {
 
     private var pendingPermissionResult: MethodChannel.Result? = null
 
+    // Active continuous USB print sessions (deviceId -> UsbSession)
+    private data class UsbSession(
+        val connection: UsbDeviceConnection,
+        val iface: UsbInterface,
+        val outEndpoint: UsbEndpoint
+    )
+    private val activeUsbSessions = mutableMapOf<Int, UsbSession>()
+
     // Network Service Discovery (mDNS) manager
     private var nsdDiscoveryManager: NsdDiscoveryManager? = null
 
@@ -85,6 +93,7 @@ class MainActivity : FlutterActivity() {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     if (device != null) {
+                        closeUsbSessionInternal(device.deviceId)
                         notifyDeviceDetached(device.deviceId)
                     }
                 }
@@ -132,6 +141,7 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
+            closeAllUsbSessions()
             unregisterReceiver(usbReceiver)
         } catch (_: Exception) {}
         try {
@@ -275,6 +285,46 @@ class MainActivity : FlutterActivity() {
                 usbManager.requestPermission(device, permissionIntent)
             }
 
+            "openUsbSession" -> {
+                val deviceId = call.argument<Int>("deviceId")
+                val device = findDeviceById(usbManager, deviceId)
+                if (device == null || !usbManager.hasPermission(device)) {
+                    result.success(false)
+                    return
+                }
+                closeUsbSessionInternal(device.deviceId)
+                val success = openUsbSessionInternal(usbManager, device)
+                result.success(success)
+            }
+
+            "writeUsbChunk" -> {
+                val deviceId = call.argument<Int>("deviceId")
+                val bytes = call.argument<ByteArray>("bytes") ?: run {
+                    val intList = call.argument<List<Int>>("bytes")
+                    intList?.map { it.toByte() }?.toByteArray()
+                }
+
+                if (bytes == null || deviceId == null) {
+                    result.error("INVALID_ARGS", "Missing deviceId or bytes", null)
+                    return
+                }
+
+                Thread {
+                    val success = writeUsbChunkInternal(deviceId, bytes)
+                    runOnUiThread {
+                        result.success(success)
+                    }
+                }.start()
+            }
+
+            "closeUsbSession" -> {
+                val deviceId = call.argument<Int>("deviceId")
+                if (deviceId != null) {
+                    closeUsbSessionInternal(deviceId)
+                }
+                result.success(true)
+            }
+
             "sendBytes" -> {
                 val deviceId = call.argument<Int>("deviceId")
                 val bytes = call.argument<ByteArray>("bytes") ?: run {
@@ -298,7 +348,7 @@ class MainActivity : FlutterActivity() {
                     return
                 }
 
-                // Execute transfer on background thread to avoid blocking main thread
+                // Execute transfer on background thread with persistent session support
                 Thread {
                     val success = transmitBytesToUsbPrinter(usbManager, device, bytes)
                     runOnUiThread {
@@ -311,13 +361,13 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun transmitBytesToUsbPrinter(usbManager: UsbManager, device: UsbDevice, data: ByteArray): Boolean {
+    @Synchronized
+    private fun openUsbSessionInternal(usbManager: UsbManager, device: UsbDevice): Boolean {
         var connection: UsbDeviceConnection? = null
         var iface: UsbInterface? = null
         try {
             connection = usbManager.openDevice(device) ?: return false
 
-            // Find printer interface (class 7) or first interface
             var targetInterface: UsbInterface? = null
             var outEndpoint: UsbEndpoint? = null
 
@@ -339,21 +389,42 @@ class MainActivity : FlutterActivity() {
             }
 
             if (targetInterface == null || outEndpoint == null) {
+                connection.close()
                 return false
             }
 
-            iface = targetInterface
             if (!connection.claimInterface(targetInterface, true)) {
+                connection.close()
                 return false
             }
 
-            val chunkSize = outEndpoint.maxPacketSize.coerceAtLeast(4096)
+            activeUsbSessions[device.deviceId] = UsbSession(connection, targetInterface, outEndpoint)
+            return true
+        } catch (_: Exception) {
+            try {
+                if (iface != null && connection != null) {
+                    connection.releaseInterface(iface)
+                }
+                connection?.close()
+            } catch (_: Exception) {}
+            return false
+        }
+    }
+
+    private fun writeUsbChunkInternal(deviceId: Int, data: ByteArray): Boolean {
+        val session = synchronized(this) { activeUsbSessions[deviceId] } ?: return false
+        try {
+            val endpoint = session.outEndpoint
+            val connection = session.connection
+            val maxPacket = endpoint.maxPacketSize.coerceAtLeast(16384)
+
             var offset = 0
             while (offset < data.size) {
-                val len = minOf(chunkSize, data.size - offset)
+                val len = minOf(maxPacket, data.size - offset)
                 val buffer = ByteArray(len)
                 System.arraycopy(data, offset, buffer, 0, len)
-                val transferred = connection.bulkTransfer(outEndpoint, buffer, len, 5000)
+                // 30-second timeout allows mechanical motors & fuser rollers to warm up
+                val transferred = connection.bulkTransfer(endpoint, buffer, len, 30000)
                 if (transferred < 0) {
                     return false
                 }
@@ -362,14 +433,45 @@ class MainActivity : FlutterActivity() {
             return true
         } catch (_: Exception) {
             return false
-        } finally {
-            try {
-                if (iface != null && connection != null) {
-                    connection.releaseInterface(iface)
-                }
-                connection?.close()
-            } catch (_: Exception) {}
         }
+    }
+
+    @Synchronized
+    private fun closeUsbSessionInternal(deviceId: Int) {
+        val session = activeUsbSessions.remove(deviceId) ?: return
+        try {
+            session.connection.releaseInterface(session.iface)
+        } catch (_: Exception) {}
+        try {
+            session.connection.close()
+        } catch (_: Exception) {}
+    }
+
+    @Synchronized
+    private fun closeAllUsbSessions() {
+        val deviceIds = ArrayList(activeUsbSessions.keys)
+        for (id in deviceIds) {
+            closeUsbSessionInternal(id)
+        }
+    }
+
+    private fun transmitBytesToUsbPrinter(usbManager: UsbManager, device: UsbDevice, data: ByteArray): Boolean {
+        val deviceId = device.deviceId
+        val existingSession = synchronized(this) { activeUsbSessions[deviceId] }
+        val wasAlreadyOpen = existingSession != null
+
+        if (!wasAlreadyOpen) {
+            val opened = openUsbSessionInternal(usbManager, device)
+            if (!opened) return false
+        }
+
+        val success = writeUsbChunkInternal(deviceId, data)
+
+        if (!wasAlreadyOpen) {
+            closeUsbSessionInternal(deviceId)
+        }
+
+        return success
     }
 
     private fun isPrinterDevice(device: UsbDevice): Boolean {

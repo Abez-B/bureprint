@@ -21,33 +21,42 @@
 
 ## 📖 Overview
 
-**BurePrint** is an open-source, privacy-first mobile printing application inspired by the workflow of mobile utility print apps. The name *BurePrint* derives from the Swahili word **bure** (*“free / without charge”*), reflecting our commitment to zero-cloud, ad-free, account-free local computing.
+**BurePrint** is an open-source, privacy-first mobile printing application designed for reliable printing across local Wi-Fi networks and direct USB OTG connections. The name *BurePrint* derives from the Swahili word **bure** (*“free / without charge”*), reflecting our commitment to zero-cloud, ad-free, account-free local computing.
 
-Unlike conventional proprietary mobile printing suites, BurePrint processes all documents **100% on-device**. No PDF files, rendered raster slices, or print credentials ever leave your local network.
+Unlike conventional proprietary mobile printing suites, BurePrint processes all documents **100% on-device**. No PDF files, rendered raster slices, or print credentials ever leave your phone or local network.
 
 ---
 
 ## ✨ Features & Capabilities
 
-### 🖨️ Printing & Connectivity
-- **RFC 8010/8011 IPP Client**: Pure Dart Internet Printing Protocol implementation with binary parser/encoder supporting `Get-Printer-Attributes`, `Print-Job`, `Create-Job`, `Send-Document`, and `Cancel-Job`.
-- **IPPS & Transport Security**: Encrypted printing over TLS (port 631) with strict hostname validation and explicit downgrade warnings.
-- **Manual IP / Host Printer Pairing**: Add network printers directly via Hostname/IP, Port, and Queue Resource Path (`/ipp/print`) when mDNS / DNS-SD broadcast fails.
-- **Supply Level Telemetry**: Real-time marker level gauges for Black toner, Cyan, Magenta, and Yellow supplies parsed directly from IPP attributes.
-- **Monochrome & Single-Purpose Detection**: Automatically identifies single-purpose monochrome printers, locks color toggles to prevent hardware errors, and streams optimized 1-bit/8-bit grayscale raster streams.
-- **Android USB Host (OTG)**: Platform channel contract for direct bulk-endpoint printing and IPP-over-USB protocol communication.
+### 🖨️ Universal Printer Driver & Hardware Engine
+Discovered printers are automatically matched to pure local drivers with visual engine verification badges:
 
-### 📄 Document Processing & Preview
-- **Reactive Document Preview Carousel**: True WYSIWYG sheet preview that calculates and renders exact aspect ratios for ISO A4, A3, A5, US Letter, Legal, Tabloid, 4×6", and 5×7".
-- **Zero-Jitter Staged Preview**: Completely locked preview viewport stage—changing settings like Pages to Print, N-Up, Scale, or Paper Size never causes surrounding modal controls to shift.
-- **N-Up Multi-Page Layout**: Render 1, 2, or 4 logical document pages per physical sheet with automatic layout division and sheet index stepping.
-- **Page Selection & Filtering**: Flexible page filtering supporting *All Pages*, *Odd Only*, *Even Only*, and *Custom Ranges* (e.g. `1, 3-5, 8`).
+| Driver Engine | Target Printer Families | Protocols & Commands | Status |
+| :--- | :--- | :--- | :---: |
+| **PWG Raster (`RaS2`)** | Universal IPP-over-USB, AirPrint, Mopria, HP OfficeJet/Envy | PWG 5102.4 `RaS2` standard bitstream | ✅ Verified |
+| **Epson ESC/P-R** | Epson EcoTank (L3110, L3250), WorkForce, Stylus, XP | `ESC @`, `ESC ( G`, `ESC ( U`, `ESC .` raster | ✅ Verified |
+| **Samsung SPL / QPDL** | Samsung ML, SCX, CLP, SL-M laser series | PJL wrapped SPL binary compression | ✅ Verified |
+| **TSPL / TSPL2** | Thermal shipping label printers (TSC, Munbyn, Xprinter, Zebra) | TSPL `SIZE`, `GAP`, `BITMAP` 203 DPI commands | ✅ Verified |
+| **HP PCL & Host-Based** | HP LaserJet, DeskJet, P1005/P1006/P1008/M1005 MFP | PCL3/5/6 and XQX / JBIG stream encoding | ✅ Verified |
+| **Brother PJL** | Brother HL/DCP/MFC monochrome laser series | PJL header + brlaser delta raster bands | ✅ Verified |
+| **Standard ESC/POS** | 58mm & 80mm mobile receipt printers | 256-dot vertical chunked raster bitstream | ✅ Verified |
+
+### 🔌 Persistent USB OTG Streaming Architecture
+- **Held-Open Hardware Sessions**: Native Android USB Host bridge (`MainActivity.kt` & `usb_host_bridge.dart`) maintains a persistent hardware session across all 256 KB Binder chunks. This prevents hardware FIFO buffer resets and stops printers from prematurely ejecting sheets before completion.
+- **Full-Sheet Canvas Compositing**: Composites 1-Up prints onto padded true-geometry canvases to eliminate page truncation across fixed-frame printer engines.
+
+### 📄 Document Processing & Responsive Preview
+- **Reactive Document Preview**: True WYSIWYG sheet preview that calculates and renders exact aspect ratios for ISO A4, A3, A5, US Letter, Legal, Tabloid, Photo 4×6", Photo 5×7", and 58mm/80mm thermal rolls.
+- **Streamlined Print Options UI**: Clean separation of primary controls (Printer, Copies stepper, Paper Size, Orientation, Color mode) from an expandable **Advanced Settings** accordion (Pages to print dropdown, Duplex mode, N-Up sheet layouts, Scaling modes, Print quality, Collation).
+- **Zero-Overflow Mobile Layout**: Sized for responsive mobile viewports (360–420dp) with zero text wrapping glitches or layout shifts.
+- **Built-in Diagnostic Test Page**: One-tap diagnostic sheet featuring CMYK/RGB calibration wedges, grayscale density gradient, 360° nozzle radial star, line frequency ladders, micro-type ladder (4pt–17pt), margin rulers (cm/in), corner alignment targets, and an emerald green bottom-of-page verification banner.
 - **Multi-File PDF Merge & Export**: Batch-select multiple PDFs, photos, or documents and merge them locally into a single organized document.
 - **"Save as PDF" Virtual Printer**: Built-in virtual driver to export, save, or download re-composed and N-Up documents straight to local storage.
 
 ### 📱 Android Integration
 - **Android Share Sheet (`ACTION_SEND` / `ACTION_SEND_MULTIPLE`)**: Share documents, PDFs, and photos straight into BurePrint from Chrome, WhatsApp, Drive, or Files.
-- **Monochrome Material 3 System**: Clean, accessible high-contrast design system honoring system Dark and Light themes with pure `#000000` and `#FFFFFF` styling.
+- **Monochrome Material 3 System**: Clean, accessible high-contrast design system honoring system Dark and Light themes.
 
 ---
 
@@ -68,9 +77,10 @@ BurePrint adheres strictly to clean architectural separation and dependency inve
 
 ```
 lib/
-├── core/         # Routing (go_router), Theme (BurePrintTheme), and Engine Primitives
-│   ├── document/ # PDF rasterizers, page-range parsers, file exporters, PDF mergers
-│   └── ipp/      # RFC 8010 binary protocol parser and serializer
+├── core/         # Routing, theme, raster engine, and protocol primitives
+│   ├── document/ # PDF rasterizers, page-range parsers, file exporters, test sheet loader
+│   ├── ipp/      # RFC 8010/8011 binary protocol parser and serializer
+│   └── raster/   # Multi-driver registry (PWG, Epson, Samsung, TSPL, HP, Brother, ESC/POS)
 ├── domain/       # Pure Dart domain entities and interfaces (Zero Flutter UI imports)
 │   ├── models/   # PrintJob, PrinterDevice, PrinterCapabilities, PrintRequest, Settings
 │   └── interfaces/ # PrintTransport, PrinterDiscovery contracts
@@ -83,6 +93,20 @@ lib/
     ├── queue/
     └── settings/
 ```
+
+---
+
+## 🗺️ Contributor Issues & Feature Roadmap
+
+Ready-to-assign GitHub Issue specifications for junior engineers and interns are organized in [`docs/issues/`](docs/issues/README.md):
+
+- [x] **Universal Multi-Brand USB Driver Engine**: Completed (PWG, ESC/P-R, SPL, TSPL, PCL, PJL, ESC/POS).
+- [x] **Persistent USB OTG Session Streaming**: Completed.
+- [x] **Printer Diagnostic & Alignment Test Sheet**: Completed.
+- [ ] [Issue #1: Direct RAW TCP Socket Printing (Port 9100 / JetDirect)](docs/issues/01-raw-tcp-jetdirect.md)
+- [ ] [Issue #2: Bluetooth SPP / BLE Printing for Mobile Thermal & Labelers](docs/issues/02-bluetooth-spp-ble.md)
+- [ ] [Issue #3: In-App Web Browser & HTML Page Printing](docs/issues/03-in-app-web-html-printing.md)
+- [ ] [Issue #4: Local Microsoft Office Document Support (DOCX, XLSX, PPTX)](docs/issues/04-office-docs-local-rendering.md)
 
 ---
 
@@ -110,7 +134,7 @@ flutter analyze
 # Run unit and widget test suite
 flutter test
 
-# Run application
+# Run application on connected device
 flutter run
 ```
 
@@ -118,14 +142,16 @@ flutter run
 
 ## 🧪 Testing
 
-BurePrint maintains extensive test coverage across domain logic, protocol serialization, and reactive preview widgets:
+BurePrint maintains extensive test coverage across domain logic, raster drivers, protocol serialization, and reactive preview widgets:
 
 ```bash
 flutter test
 ```
 
-### Verified Test Suites:
-- `test/domain_models_test.dart`: Serialization, equality, and state transitions of PrintJob, PrinterDevice, PrinterCapabilities, PrinterSupplyLevel, and PaperDimensions.
+### Verified Test Suites (78 Passing Tests):
+- `test/raster/rasterizer_engine_test.dart`: End-to-end rasterization and protocol syntax verification for PWG Raster, Epson ESC/P-R, Samsung SPL, TSPL, Brother PJL, HP LaserJet P1000 XQX/JBIG, ESC/POS, and PCL.
+- `test/usb/usb_transport_test.dart`: USB OTG permission flows, session management, and hardware safety rejections.
+- `test/domain_models_test.dart`: Serialization, equality, and state transitions of PrintJob, PrinterDevice, PrinterCapabilities, and PaperDimensions.
 - `test/document/document_pipeline_test.dart`: Page selection engine (all, odd, even, custom ranges) and printer format capability negotiation.
 - `test/document/document_preview_carousel_test.dart`: N-Up page grouping, responsive scaling, and carousel reactivity.
 - `test/document/office_document_converter_test.dart`: Safe MIME type detection and format conversion pipelines.
@@ -140,7 +166,7 @@ flutter test
 Contributions are welcome! Please ensure all pull requests satisfy the **Definition of Done**:
 1. `dart format --output=none --set-exit-if-changed lib test` passes cleanly.
 2. `flutter analyze` reports 0 errors and 0 warnings.
-3. Relevant unit/widget tests are included and all regression tests pass.
+3. Relevant unit/widget tests are included and all regression tests pass (`flutter test`).
 4. Strictly respects privacy safeguards (no telemetry, temp files cleaned).
 
 ---

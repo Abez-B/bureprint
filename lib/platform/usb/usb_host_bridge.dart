@@ -11,6 +11,9 @@ abstract interface class UsbHostBridge {
   Future<bool> requestPermission(int deviceId);
   Future<bool> hasPermission(int deviceId);
   Future<bool> sendBytes(int deviceId, List<int> bytes);
+  Future<bool> openUsbSession(int deviceId);
+  Future<bool> writeUsbChunk(int deviceId, List<int> bytes);
+  Future<void> closeUsbSession(int deviceId);
   Stream<UsbPrinterDevice> get onDeviceAttached;
   Stream<int> get onDeviceDetached;
 }
@@ -111,15 +114,62 @@ class AndroidUsbHostBridge implements UsbHostBridge {
   }
 
   @override
+  Future<bool> openUsbSession(int deviceId) async {
+    if (!_isSupportedPlatform) return false;
+    try {
+      final bool? result = await _methodChannel
+          .invokeMethod<bool>('openUsbSession', {'deviceId': deviceId});
+      return result ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> writeUsbChunk(int deviceId, List<int> bytes) async {
+    if (!_isSupportedPlatform) return false;
+    try {
+      final bool? result = await _methodChannel.invokeMethod<bool>(
+        'writeUsbChunk',
+        {'deviceId': deviceId, 'bytes': bytes},
+      );
+      return result ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> closeUsbSession(int deviceId) async {
+    if (!_isSupportedPlatform) return;
+    try {
+      await _methodChannel
+          .invokeMethod<bool>('closeUsbSession', {'deviceId': deviceId});
+    } catch (_) {}
+  }
+
+  @override
   Future<bool> sendBytes(int deviceId, List<int> bytes) async {
     if (!_isSupportedPlatform) return false;
     try {
-      final bool? result =
-          await _methodChannel.invokeMethod<bool>('sendBytes', {
-        'deviceId': deviceId,
-        'bytes': bytes,
-      });
-      return result ?? false;
+      final opened = await openUsbSession(deviceId);
+      if (!opened) return false;
+
+      const chunkSize = 128 * 1024; // 128 KB chunks
+      try {
+        for (int i = 0; i < bytes.length; i += chunkSize) {
+          final end =
+              (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
+          final chunk = bytes.sublist(i, end);
+          final success = await writeUsbChunk(deviceId, chunk);
+          if (!success) {
+            return false;
+          }
+        }
+        return true;
+      } finally {
+        await closeUsbSession(deviceId);
+      }
     } catch (_) {
       return false;
     }

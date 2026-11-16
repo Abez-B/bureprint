@@ -1,12 +1,22 @@
 import '../../domain/models/printer_device.dart';
 import 'drivers/brother_pjl_rasterizer.dart';
+import 'drivers/epson_escpr_rasterizer.dart';
+import 'drivers/hp_xqx_rasterizer.dart';
+import 'drivers/pwg_rasterizer.dart';
+import 'drivers/samsung_spl_rasterizer.dart';
 import 'drivers/standard_rasterizers.dart';
+import 'drivers/tspl_rasterizer.dart';
 import 'printer_rasterizer.dart';
 
 /// Central registry managing all brand-specific and standard printer drivers.
 class PrinterDriverRegistry {
   static final List<PrinterRasterizer> _drivers = [
+    const PwgRasterizer(),
+    const EpsonEscprRasterizer(),
+    const SamsungSplRasterizer(),
+    const TsplRasterizer(),
     const BrotherPjlRasterizer(),
+    const HpLaserJetP1000Rasterizer(),
     const EscPosRasterizer(),
     const StandardPclRasterizer(),
   ];

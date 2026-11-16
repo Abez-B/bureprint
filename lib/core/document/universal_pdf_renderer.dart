@@ -41,6 +41,39 @@ class UniversalPdfRenderer {
     }
   }
 
+  /// Returns the dimensions (in points) of a PDF page.
+  Future<({double width, double height})?> getPageDimensions(
+    String filePath, {
+    int pageNumber = 1,
+  }) async {
+    String resolvedPath = filePath;
+    if (OfficeDocumentConverter.isConvertibleOfficeDocument(filePath)) {
+      final converted =
+          await OfficeDocumentConverter.instance.convertToPdf(filePath);
+      if (converted != null) resolvedPath = converted;
+    }
+
+    final file = File(resolvedPath);
+    if (!await file.exists()) return null;
+
+    if (!kIsWeb && Platform.isLinux) {
+      return _getLinuxPageDimensions(resolvedPath);
+    }
+
+    PdfDocument? doc;
+    try {
+      doc = await PdfDocument.openFile(resolvedPath);
+      final page = await doc.getPage(pageNumber);
+      final dims = (width: page.width, height: page.height);
+      await page.close();
+      return dims;
+    } catch (_) {
+      return null;
+    } finally {
+      await doc?.close();
+    }
+  }
+
   /// Renders a specific page (1-based index) as PNG image bytes.
   Future<Uint8List?> renderPageImage({
     required String filePath,
@@ -147,6 +180,27 @@ class UniversalPdfRenderer {
     } catch (e) {
       debugPrint('Linux PDF render fallback error: $e');
     }
+    return null;
+  }
+
+  Future<({double width, double height})?> _getLinuxPageDimensions(
+      String filePath) async {
+    try {
+      final result = await Process.run('pdfinfo', [filePath]);
+      if (result.exitCode == 0) {
+        final lines = (result.stdout as String).split('\n');
+        for (final line in lines) {
+          if (line.startsWith('Page size:')) {
+            final parts = line.replaceFirst('Page size:', '').trim().split('x');
+            if (parts.length >= 2) {
+              final w = double.tryParse(parts[0].trim().split(' ').first);
+              final h = double.tryParse(parts[1].trim().split(' ').first);
+              if (w != null && h != null) return (width: w, height: h);
+            }
+          }
+        }
+      }
+    } catch (_) {}
     return null;
   }
 }

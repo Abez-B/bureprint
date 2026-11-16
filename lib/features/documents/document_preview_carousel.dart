@@ -62,6 +62,9 @@ class _DocumentPreviewCarouselState extends State<DocumentPreviewCarousel> {
         oldWidget.pageSelectionMode != widget.pageSelectionMode ||
             oldWidget.customPageRange != widget.customPageRange ||
             oldWidget.pagesPerSheet != widget.pagesPerSheet;
+    final layoutChanged = oldWidget.landscape != widget.landscape ||
+        oldWidget.scalingMode != widget.scalingMode ||
+        oldWidget.paperSize != widget.paperSize;
 
     if (docChanged) {
       _currentSheet = 1;
@@ -71,6 +74,8 @@ class _DocumentPreviewCarouselState extends State<DocumentPreviewCarousel> {
       _computePrintablePages();
       _currentSheet = 1;
       _renderCurrentSheetPages();
+    } else if (layoutChanged) {
+      setState(() {});
     }
   }
 

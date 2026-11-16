@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/printer_capabilities.dart';
 import '../../domain/models/printer_device.dart';
 import '../../platform/usb/usb_host_bridge.dart';
+import '../../platform/usb/usb_printer_device.dart';
 import 'printers_provider.dart';
 
 class PrintersScreen extends ConsumerWidget {
@@ -136,16 +137,18 @@ class PrintersScreen extends ConsumerWidget {
               _buildUsbCard(context, ref, usbDev, printerState, isDark),
           const SizedBox(height: 20),
 
-          // Discovered Printers
+          // Discovered Network Printers
           Text(
-            'Discovered Printers',
+            'Discovered Network Printers (Wi-Fi)',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
             ),
           ),
           const SizedBox(height: 8),
-          if (printerState.discoveredPrinters.isEmpty)
+          if (printerState.discoveredPrinters
+              .where((p) => p.connectionType == PrinterConnectionType.network)
+              .isEmpty)
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -165,7 +168,8 @@ class PrintersScreen extends ConsumerWidget {
               ),
             )
           else
-            for (final printer in printerState.discoveredPrinters)
+            for (final printer in printerState.discoveredPrinters.where(
+                (p) => p.connectionType == PrinterConnectionType.network))
               _buildDiscoveredCard(context, ref, printer, printerState, isDark),
           const SizedBox(height: 20),
 
@@ -355,9 +359,13 @@ class PrintersScreen extends ConsumerWidget {
     PrinterRegistryState printerState,
     bool isDark,
   ) {
-    final hostLabel = printer.host != null && printer.host!.isNotEmpty
-        ? 'Wi-Fi · ${printer.host}'
-        : 'Wi-Fi Network';
+    final isUsb = printer.connectionType == PrinterConnectionType.usb;
+    final hostLabel = isUsb
+        ? 'USB OTG Printer'
+        : (printer.host != null && printer.host!.isNotEmpty
+            ? 'Wi-Fi · ${printer.host}'
+            : 'Wi-Fi Network');
+    final icon = isUsb ? Icons.usb_rounded : Icons.wifi_rounded;
     final supplies =
         printerState.capabilitiesMap[printer.id]?.markerSupplies ?? const [];
 
@@ -386,7 +394,7 @@ class PrintersScreen extends ConsumerWidget {
                         : const Color(0xFFF2F2F7),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.wifi_rounded, size: 20),
+                  child: Icon(icon, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -447,16 +455,45 @@ class PrintersScreen extends ConsumerWidget {
     PrinterRegistryState printerState,
     bool isDark,
   ) {
-    final isSelected = printerState.selectedPrinter?.id == printer.id;
+    final isSelected = printerState.selectedPrinter?.id == printer.id ||
+        (!printer.connectionType.name.contains('network') &&
+            printerState.selectedPrinter?.vendorId == printer.vendorId &&
+            printerState.selectedPrinter?.productId == printer.productId);
     final isNetwork = printer.connectionType == PrinterConnectionType.network;
+    final isConnectedUsb = !isNetwork &&
+        printerState.usbPrinters.any((u) =>
+            u.deviceId == printer.usbDeviceId ||
+            (u.vendorId == printer.vendorId &&
+                u.productId == printer.productId));
     final subtitleLabel = isNetwork
         ? (printer.host != null && printer.host!.isNotEmpty
             ? 'Wi-Fi · ${printer.host}'
             : 'Wi-Fi Printer')
-        : 'USB OTG Printer';
+        : (isConnectedUsb ? 'USB OTG · Connected' : 'USB OTG · Disconnected');
 
     final supplies =
         printerState.capabilitiesMap[printer.id]?.markerSupplies ?? const [];
+
+    void activatePrinter() {
+      if (!isNetwork) {
+        final activeUsb =
+            printerState.usbPrinters.cast<UsbPrinterDevice?>().firstWhere(
+                  (u) =>
+                      u != null &&
+                      (u.deviceId == printer.usbDeviceId ||
+                          (u.vendorId == printer.vendorId &&
+                              u.productId == printer.productId)),
+                  orElse: () => null,
+                );
+        if (activeUsb != null) {
+          ref
+              .read(printerRegistryProvider.notifier)
+              .selectPrinter(activeUsb.toPrinterDevice());
+          return;
+        }
+      }
+      ref.read(printerRegistryProvider.notifier).selectPrinter(printer);
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -472,8 +509,7 @@ class PrintersScreen extends ConsumerWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () =>
-            ref.read(printerRegistryProvider.notifier).selectPrinter(printer),
+        onTap: activatePrinter,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(
@@ -548,9 +584,7 @@ class PrintersScreen extends ConsumerWidget {
                         minimumSize: const Size(0, 32),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      onPressed: () => ref
-                          .read(printerRegistryProvider.notifier)
-                          .selectPrinter(printer),
+                      onPressed: activatePrinter,
                       child:
                           const Text('Select', style: TextStyle(fontSize: 12)),
                     ),

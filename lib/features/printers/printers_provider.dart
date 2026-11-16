@@ -193,8 +193,9 @@ class PrinterRegistryNotifier extends Notifier<PrinterRegistryState> {
   }
 
   void addOrUpdateUsbDevice(UsbPrinterDevice device) {
-    final existingIndex =
-        state.usbPrinters.indexWhere((d) => d.deviceId == device.deviceId);
+    final existingIndex = state.usbPrinters.indexWhere((d) =>
+        d.deviceId == device.deviceId ||
+        (d.vendorId == device.vendorId && d.productId == device.productId));
     final updatedList = List<UsbPrinterDevice>.from(state.usbPrinters);
     if (existingIndex >= 0) {
       updatedList[existingIndex] = device;
@@ -203,30 +204,61 @@ class PrinterRegistryNotifier extends Notifier<PrinterRegistryState> {
     }
 
     final printerDevice = device.toPrinterDevice();
+
+    // Check if this printer is already in savedPrinters
+    final savedIndex = state.savedPrinters.indexWhere((p) =>
+        p.id == printerDevice.id ||
+        (p.vendorId == device.vendorId && p.productId == device.productId));
+
+    final updatedSaved = List<PrinterDevice>.from(state.savedPrinters);
+    final PrinterDevice activePrinter;
+    if (savedIndex >= 0) {
+      // Update existing saved printer with active runtime usbDeviceId & online status
+      activePrinter = updatedSaved[savedIndex].copyWith(
+        usbDeviceId: device.deviceId,
+        isOnline: true,
+      );
+      updatedSaved[savedIndex] = activePrinter;
+    } else {
+      activePrinter = printerDevice;
+      updatedSaved.add(activePrinter);
+    }
+
+    // Persist saved printers forever
+    LocalStorageService.instance.savePrinters(updatedSaved);
+
     state = state.copyWith(
       usbPrinters: updatedList,
-      selectedPrinter: state.selectedPrinter == null ||
-              state.selectedPrinter?.id == 'save-as-pdf-virtual'
-          ? printerDevice
-          : state.selectedPrinter,
+      savedPrinters: updatedSaved,
+      selectedPrinter: activePrinter, // Auto-select the plugged-in printer
     );
-
-    addDiscoveredPrinter(printerDevice);
-    savePrinter(printerDevice);
   }
 
   void removeUsbDevice(int deviceId) {
-    final updated =
+    final detached = state.usbPrinters.cast<UsbPrinterDevice?>().firstWhere(
+          (d) => d?.deviceId == deviceId,
+          orElse: () => null,
+        );
+
+    final updatedUsb =
         state.usbPrinters.where((d) => d.deviceId != deviceId).toList();
-    final removedPrinterId = 'usb-$deviceId';
+
+    // Mark corresponding saved printer as offline
+    final updatedSaved = state.savedPrinters.map((p) {
+      if (p.usbDeviceId == deviceId ||
+          (detached != null &&
+              p.vendorId == detached.vendorId &&
+              p.productId == detached.productId)) {
+        return p.copyWith(isOnline: false);
+      }
+      return p;
+    }).toList();
+
+    LocalStorageService.instance.savePrinters(updatedSaved);
+
     state = state.copyWith(
-      usbPrinters: updated,
-      discoveredPrinters: state.discoveredPrinters
-          .where((p) => p.id != removedPrinterId)
-          .toList(),
-      selectedPrinter: state.selectedPrinter?.id == removedPrinterId
-          ? (state.savedPrinters.isNotEmpty ? state.savedPrinters.first : null)
-          : state.selectedPrinter,
+      usbPrinters: updatedUsb,
+      savedPrinters: updatedSaved,
     );
   }
 

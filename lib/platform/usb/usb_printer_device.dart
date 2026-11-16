@@ -23,8 +23,58 @@ class UsbPrinterDevice {
   final bool hasPermission;
   final bool isIppOverUsb;
 
-  String get displayName =>
-      productName ?? manufacturerName ?? 'USB Printer ($vendorId:$productId)';
+  String get displayName {
+    if (productName != null && productName!.isNotEmpty) {
+      return productName!;
+    }
+    if (manufacturerName != null && manufacturerName!.isNotEmpty) {
+      return manufacturerName!;
+    }
+    // Map known USB printer IDs to their real hardware names
+    if (vendorId == 0x03F0) {
+      // HP (1008 in decimal)
+      return switch (productId) {
+        0x3B17 => 'HP LaserJet M1005 MFP',
+        0x3D17 => 'HP LaserJet P1005',
+        0x3E17 => 'HP LaserJet P1006',
+        0x4817 => 'HP LaserJet P1007',
+        0x4917 => 'HP LaserJet P1008',
+        0x3F17 => 'HP LaserJet P1505',
+        0x4017 => 'HP LaserJet P1505n',
+        0x4117 => 'HP LaserJet 1018',
+        0x2B17 => 'HP LaserJet 1020',
+        _ => 'HP Printer ($vendorId:$productId)',
+      };
+    }
+    if (vendorId == 0x04A9) {
+      // Canon (1193 in decimal)
+      return switch (productId) {
+        0x2676 => 'Canon LBP2900 (CAPT)',
+        0x266A => 'Canon LBP3000 (CAPT)',
+        0x26DA => 'Canon LBP3010/LBP3018 (CAPT)',
+        0x26E0 => 'Canon LBP3100/LBP3108 (CAPT)',
+        0x26ED => 'Canon LBP6000/LBP6018 (CAPT)',
+        _ => 'Canon USB Device ($vendorId:$productId)',
+      };
+    }
+    if (vendorId == 0x04B8) {
+      // Epson (1208 in decimal)
+      return 'Epson USB Printer ($vendorId:$productId)';
+    }
+    if (vendorId == 0x04E8) {
+      // Samsung (1256 in decimal)
+      return 'Samsung Laser Printer ($vendorId:$productId)';
+    }
+    if (vendorId == 0x04F9) {
+      // Brother (1273 in decimal)
+      return 'Brother USB Printer ($vendorId:$productId)';
+    }
+    if (vendorId == 0x0A5F) {
+      // Zebra (2655 in decimal)
+      return 'Zebra Thermal Label Printer ($vendorId:$productId)';
+    }
+    return 'USB Printer ($vendorId:$productId)';
+  }
 
   UsbPrinterDevice copyWith({
     int? deviceId,
@@ -60,19 +110,22 @@ class UsbPrinterDevice {
       };
 
   PrinterDevice toPrinterDevice() {
+    final persistentId =
+        'usb-${vendorId.toRadixString(16).padLeft(4, '0')}-${productId.toRadixString(16).padLeft(4, '0')}';
     return PrinterDevice(
-      id: 'usb-$deviceId',
+      id: persistentId,
       name: displayName,
       connectionType: PrinterConnectionType.usb,
-      host: 'usb-$deviceId',
+      host: persistentId,
       port: 0,
       resourcePath: '/usb/print',
       isOnline: true,
       isDiscovered: true,
-      model: productName ?? manufacturerName,
+      model: productName ?? manufacturerName ?? displayName,
       vendorId: vendorId,
       productId: productId,
       usbDeviceId: deviceId,
+      isIppOverUsb: isIppOverUsb,
     );
   }
 
@@ -87,6 +140,25 @@ class UsbPrinterDevice {
       hasPermission: json['hasPermission'] as bool? ?? false,
       isIppOverUsb: json['isIppOverUsb'] as bool? ?? false,
     );
+  }
+
+  factory UsbPrinterDevice.fromPrinterDevice(PrinterDevice printer) {
+    int devId = printer.usbDeviceId ?? 0;
+    if (devId == 0 && printer.id.startsWith('usb-')) {
+      final part = printer.id.replaceFirst('usb-', '');
+      devId = int.tryParse(part) ?? 0;
+    }
+    final dev = UsbPrinterDevice(
+      deviceId: devId,
+      vendorId: printer.vendorId ?? 0,
+      productId: printer.productId ?? 0,
+      deviceName: printer.name,
+      manufacturerName: printer.model,
+      productName: printer.name.contains(':') ? null : printer.name,
+      hasPermission: true,
+      isIppOverUsb: false,
+    );
+    return dev;
   }
 
   @override

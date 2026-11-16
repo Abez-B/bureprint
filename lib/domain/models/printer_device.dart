@@ -25,6 +25,7 @@ class PrinterDevice {
     this.vendorId,
     this.productId,
     this.usbDeviceId,
+    this.isIppOverUsb = false,
   });
 
   final String id;
@@ -41,6 +42,7 @@ class PrinterDevice {
   final int? vendorId;
   final int? productId;
   final int? usbDeviceId;
+  final bool isIppOverUsb;
 
   String get endpointUri {
     final scheme = securityPolicy == TransportSecurityPolicy.plainIppExplicit
@@ -64,6 +66,7 @@ class PrinterDevice {
     int? vendorId,
     int? productId,
     int? usbDeviceId,
+    bool? isIppOverUsb,
   }) {
     return PrinterDevice(
       id: id ?? this.id,
@@ -80,6 +83,7 @@ class PrinterDevice {
       vendorId: vendorId ?? this.vendorId,
       productId: productId ?? this.productId,
       usbDeviceId: usbDeviceId ?? this.usbDeviceId,
+      isIppOverUsb: isIppOverUsb ?? this.isIppOverUsb,
     );
   }
 
@@ -98,6 +102,7 @@ class PrinterDevice {
         if (vendorId != null) 'vendorId': vendorId,
         if (productId != null) 'productId': productId,
         if (usbDeviceId != null) 'usbDeviceId': usbDeviceId,
+        'isIppOverUsb': isIppOverUsb,
       };
 
   factory PrinterDevice.fromJson(Map<String, dynamic> json) {
@@ -120,6 +125,7 @@ class PrinterDevice {
       vendorId: json['vendorId'] as int?,
       productId: json['productId'] as int?,
       usbDeviceId: json['usbDeviceId'] as int?,
+      isIppOverUsb: json['isIppOverUsb'] as bool? ?? false,
     );
   }
 
@@ -138,7 +144,8 @@ class PrinterDevice {
           model == other.model &&
           securityPolicy == other.securityPolicy &&
           isDiscovered == other.isDiscovered &&
-          capabilitiesQueried == other.capabilitiesQueried;
+          capabilitiesQueried == other.capabilitiesQueried &&
+          isIppOverUsb == other.isIppOverUsb;
 
   @override
   int get hashCode => Object.hash(
@@ -153,5 +160,6 @@ class PrinterDevice {
         securityPolicy,
         isDiscovered,
         capabilitiesQueried,
+        isIppOverUsb,
       );
 }
